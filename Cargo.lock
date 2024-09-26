@@ -11481,6 +11481,7 @@ dependencies = [
  "menu",
  "picker",
  "project",
+ "proto",
  "schemars",
  "serde",
  "serde_json",
