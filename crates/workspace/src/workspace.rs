@@ -5,6 +5,7 @@ pub mod notifications;
 pub mod pane;
 pub mod pane_group;
 mod persistence;
+pub mod scrollbar;
 pub mod searchable;
 pub mod shared_screen;
 mod status_bar;

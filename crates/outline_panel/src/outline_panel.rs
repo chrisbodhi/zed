@@ -1,11 +1,12 @@
 mod outline_panel_settings;
 
 use std::{
-    cell::OnceCell,
+    cell::{Cell, OnceCell},
     cmp,
     hash::Hash,
     ops::Range,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::{atomic::AtomicBool, Arc, OnceLock},
     time::Duration,
     u32,
@@ -115,6 +116,9 @@ pub struct OutlinePanel {
     cached_entries: Vec<CachedEntry>,
     filter_editor: View<Editor>,
     mode: ItemsDisplayMode,
+    vertical_scrollbar_drag_thumb_offset: Rc<Cell<Option<f32>>>,
+    horizontal_scrollbar_drag_thumb_offset: Rc<Cell<Option<f32>>>,
+    max_width_cached_entry_index: Option<usize>,
 }
 
 enum ItemsDisplayMode {
@@ -688,6 +692,9 @@ impl OutlinePanel {
                 outline_fetch_tasks: HashMap::default(),
                 excerpts: HashMap::default(),
                 cached_entries: Vec::new(),
+                vertical_scrollbar_drag_thumb_offset: Rc::default(),
+                horizontal_scrollbar_drag_thumb_offset: Rc::default(),
+                max_width_cached_entry_index: None,
                 _subscriptions: vec![
                     settings_subscription,
                     icons_subscription,
@@ -3162,6 +3169,7 @@ impl OutlinePanel {
             .collect::<HashMap<_, _>>();
 
             let mut id = 0;
+            let mut max_width_item = None;
             entries.retain_mut(|cached_entry| {
                 let retain = match matched_ids.remove(&id) {
                     Some(string_match) => {
@@ -3171,6 +3179,9 @@ impl OutlinePanel {
                     None => false,
                 };
                 id += 1;
+                if retain {
+                    ensure_max_width_item(&mut max_width_item, cached_entry);
+                }
                 retain
             });
 
@@ -3603,6 +3614,12 @@ impl OutlinePanel {
         self.selected_entry = SelectedEntry::Valid(entry);
         self.autoscroll(cx);
         cx.notify();
+    }
+}
+
+fn ensure_max_width_item(max_width_item: &mut Option<(usize, usize)>, entry: &CachedEntry) {
+    match entry {
+        _ => todo!("TODO kb"),
     }
 }
 

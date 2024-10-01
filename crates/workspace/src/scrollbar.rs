@@ -1,18 +1,182 @@
 use std::{cell::Cell, ops::Range, rc::Rc};
 
 use gpui::{
-    point, quad, Bounds, ContentMask, Corners, Edges, EntityId, Hitbox, Hsla, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, ScrollWheelEvent, Style, UniformListScrollHandle,
+    point, quad, AppContext, Bounds, ContentMask, Corners, Edges, EntityId, FocusHandle, Hitbox,
+    Hsla, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollWheelEvent, Style,
+    UniformListScrollHandle,
 };
 use ui::{prelude::*, px, relative, IntoElement};
 
+pub fn render_vertical_scrollbar(
+    parent_id: EntityId,
+    parent_focus_handle: FocusHandle,
+    scroll_handle: UniformListScrollHandle::new(),
+    scrollbar_drag_thumb_offset: Rc<Cell<Option<f32>>>,
+    cx: &mut AppContext,
+) -> Option<Stateful<Div>> {
+    if !self.show_scrollbar || !Self::should_show_scrollbar(cx) {
+        return None;
+    }
+    let scroll_handle = scroll_handle.0.borrow();
+    let total_list_length = scroll_handle
+        .last_item_size
+        .filter(|_| scrollbar_drag_thumb_offset.get().is_some())?
+        .contents
+        .height
+        .0 as f64;
+    let current_offset = scroll_handle.base_handle.offset().y.0.min(0.).abs() as f64;
+    let mut percentage = current_offset / total_list_length;
+    let end_offset = (current_offset + scroll_handle.base_handle.bounds().size.height.0 as f64)
+        / total_list_length;
+    // Uniform scroll handle might briefly report an offset greater than the length of a list;
+    // in such case we'll adjust the starting offset as well to keep the scrollbar thumb length stable.
+    let overshoot = (end_offset - 1.).clamp(0., 1.);
+    if overshoot > 0. {
+        percentage -= overshoot;
+    }
+    const MINIMUM_SCROLLBAR_PERCENTAGE_HEIGHT: f64 = 0.005;
+    if percentage + MINIMUM_SCROLLBAR_PERCENTAGE_HEIGHT > 1.0 || end_offset > total_list_length {
+        return None;
+    }
+    if total_list_length < scroll_handle.base_handle.bounds().size.height.0 as f64 {
+        return None;
+    }
+    let end_offset = end_offset.clamp(percentage + MINIMUM_SCROLLBAR_PERCENTAGE_HEIGHT, 1.);
+    Some(
+        div()
+            .occlude()
+            .id("generic-vertical-scroll")
+            .on_mouse_move(cx.listener(|_, _, cx| {
+                cx.notify();
+                cx.stop_propagation()
+            }))
+            .on_hover(|_, cx| {
+                cx.stop_propagation();
+            })
+            .on_any_mouse_down(|_, cx| {
+                cx.stop_propagation();
+            })
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, cx| {
+                    if scrollbar_drag_thumb_offset.get().is_none()
+                        && !parent_focus_handle.contains_focused(cx)
+                    {
+                        this.hide_scrollbar(cx);
+                        cx.notify();
+                    }
+
+                    cx.stop_propagation();
+                }),
+            )
+            .on_scroll_wheel(cx.listener(|_, _, cx| {
+                cx.notify();
+            }))
+            .h_full()
+            .absolute()
+            .right_1()
+            .top_1()
+            .bottom_1()
+            .w(px(12.))
+            .cursor_default()
+            .child(Scrollbar::vertical(
+                percentage as f32..end_offset as f32,
+                scroll_handle,
+                scrollbar_drag_thumb_offset,
+                parent_id,
+            )),
+    )
+}
+
+pub fn render_horizontal_scrollbar(
+    parent_id: EntityId,
+    parent_focus_handle: FocusHandle,
+    scroll_handle: UniformListScrollHandle::new(),
+    scrollbar_drag_thumb_offset: Rc<Cell<Option<f32>>>,
+    cx: &mut AppContext,
+) -> Option<Stateful<Div>> {
+    if !self.show_scrollbar || !Self::should_show_scrollbar(cx) || self.width.is_none() {
+        return None;
+    }
+    let scroll_handle = scroll_handle.0.borrow();
+    let longest_item_width = scroll_handle
+        .last_item_size
+        .filter(|_| scrollbar_drag_thumb_offset.get().is_some())
+        .filter(|size| size.contents.width > size.item.width)?
+        .contents
+        .width
+        .0 as f64;
+    let current_offset = scroll_handle.base_handle.offset().x.0.min(0.).abs() as f64;
+    let mut percentage = current_offset / longest_item_width;
+    let end_offset = (current_offset + scroll_handle.base_handle.bounds().size.width.0 as f64)
+        / longest_item_width;
+    // Uniform scroll handle might briefly report an offset greater than the length of a list;
+    // in such case we'll adjust the starting offset as well to keep the scrollbar thumb length stable.
+    let overshoot = (end_offset - 1.).clamp(0., 1.);
+    if overshoot > 0. {
+        percentage -= overshoot;
+    }
+    const MINIMUM_SCROLLBAR_PERCENTAGE_WIDTH: f64 = 0.005;
+    if percentage + MINIMUM_SCROLLBAR_PERCENTAGE_WIDTH > 1.0 || end_offset > longest_item_width {
+        return None;
+    }
+    if longest_item_width < scroll_handle.base_handle.bounds().size.width.0 as f64 {
+        return None;
+    }
+    let end_offset = end_offset.clamp(percentage + MINIMUM_SCROLLBAR_PERCENTAGE_WIDTH, 1.);
+    Some(
+        div()
+            .occlude()
+            .id("generic-horizontal-scroll")
+            .on_mouse_move(cx.listener(|_, _, cx| {
+                cx.notify();
+                cx.stop_propagation()
+            }))
+            .on_hover(|_, cx| {
+                cx.stop_propagation();
+            })
+            .on_any_mouse_down(|_, cx| {
+                cx.stop_propagation();
+            })
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, cx| {
+                    if scrollbar_drag_thumb_offset.get().is_none()
+                        && !parent_focus_handle.contains_focused(cx)
+                    {
+                        this.hide_scrollbar(cx);
+                        cx.notify();
+                    }
+
+                    cx.stop_propagation();
+                }),
+            )
+            .on_scroll_wheel(cx.listener(|_, _, cx| {
+                cx.notify();
+            }))
+            .w_full()
+            .absolute()
+            .right_1()
+            .left_1()
+            .bottom_1()
+            .h(px(12.))
+            .cursor_default()
+            .child(Scrollbar::horizontal(
+                percentage as f32..end_offset as f32,
+                scroll_handle.clone(),
+                scrollbar_drag_thumb_offset.clone(),
+                parent_id,
+            )),
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ScrollbarKind {
+pub enum ScrollbarKind {
     Horizontal,
     Vertical,
 }
 
-pub(crate) struct ProjectPanelScrollbar {
+pub struct Scrollbar {
     thumb: Range<f32>,
     scroll: UniformListScrollHandle,
     // If Some(), there's an active drag, offset by percentage from the top of thumb.
@@ -21,8 +185,8 @@ pub(crate) struct ProjectPanelScrollbar {
     parent_id: EntityId,
 }
 
-impl ProjectPanelScrollbar {
-    pub(crate) fn vertical(
+impl Scrollbar {
+    pub fn vertical(
         thumb: Range<f32>,
         scroll: UniformListScrollHandle,
         scrollbar_drag_state: Rc<Cell<Option<f32>>>,
@@ -37,7 +201,7 @@ impl ProjectPanelScrollbar {
         }
     }
 
-    pub(crate) fn horizontal(
+    pub fn horizontal(
         thumb: Range<f32>,
         scroll: UniformListScrollHandle,
         scrollbar_drag_state: Rc<Cell<Option<f32>>>,
@@ -53,7 +217,7 @@ impl ProjectPanelScrollbar {
     }
 }
 
-impl gpui::Element for ProjectPanelScrollbar {
+impl gpui::Element for Scrollbar {
     type RequestLayoutState = ();
 
     type PrepaintState = Hitbox;
@@ -268,7 +432,7 @@ impl gpui::Element for ProjectPanelScrollbar {
     }
 }
 
-impl IntoElement for ProjectPanelScrollbar {
+impl IntoElement for Scrollbar {
     type Element = Self;
 
     fn into_element(self) -> Self::Element {

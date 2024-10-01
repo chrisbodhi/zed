@@ -1,7 +1,5 @@
 mod project_panel_settings;
-mod scrollbar;
 use client::{ErrorCode, ErrorExt};
-use scrollbar::ProjectPanelScrollbar;
 use settings::{Settings, SettingsStore};
 
 use db::kvp::KEY_VALUE_STORE;
@@ -49,6 +47,7 @@ use util::{maybe, ResultExt, TryFutureExt};
 use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
     notifications::{DetachAndPromptErr, NotifyTaskExt},
+    scrollbar::Scrollbar,
     DraggedSelection, OpenInTerminal, SelectedEntry, Workspace,
 };
 use worktree::CreatedEntry;
@@ -2596,165 +2595,6 @@ impl ProjectPanel {
                 is_active && self.focus_handle.contains_focused(cx),
                 |this| this.border_color(Color::Selected.color(cx)),
             )
-    }
-
-    fn render_vertical_scrollbar(&self, cx: &mut ViewContext<Self>) -> Option<Stateful<Div>> {
-        if !Self::should_show_scrollbar(cx) {
-            return None;
-        }
-        let scroll_handle = self.scroll_handle.0.borrow();
-        let total_list_length = scroll_handle
-            .last_item_size
-            .filter(|_| {
-                self.show_scrollbar || self.vertical_scrollbar_drag_thumb_offset.get().is_some()
-            })?
-            .contents
-            .height
-            .0 as f64;
-        let current_offset = scroll_handle.base_handle.offset().y.0.min(0.).abs() as f64;
-        let mut percentage = current_offset / total_list_length;
-        let end_offset = (current_offset + scroll_handle.base_handle.bounds().size.height.0 as f64)
-            / total_list_length;
-        // Uniform scroll handle might briefly report an offset greater than the length of a list;
-        // in such case we'll adjust the starting offset as well to keep the scrollbar thumb length stable.
-        let overshoot = (end_offset - 1.).clamp(0., 1.);
-        if overshoot > 0. {
-            percentage -= overshoot;
-        }
-        const MINIMUM_SCROLLBAR_PERCENTAGE_HEIGHT: f64 = 0.005;
-        if percentage + MINIMUM_SCROLLBAR_PERCENTAGE_HEIGHT > 1.0 || end_offset > total_list_length
-        {
-            return None;
-        }
-        if total_list_length < scroll_handle.base_handle.bounds().size.height.0 as f64 {
-            return None;
-        }
-        let end_offset = end_offset.clamp(percentage + MINIMUM_SCROLLBAR_PERCENTAGE_HEIGHT, 1.);
-        Some(
-            div()
-                .occlude()
-                .id("project-panel-vertical-scroll")
-                .on_mouse_move(cx.listener(|_, _, cx| {
-                    cx.notify();
-                    cx.stop_propagation()
-                }))
-                .on_hover(|_, cx| {
-                    cx.stop_propagation();
-                })
-                .on_any_mouse_down(|_, cx| {
-                    cx.stop_propagation();
-                })
-                .on_mouse_up(
-                    MouseButton::Left,
-                    cx.listener(|this, _, cx| {
-                        if this.vertical_scrollbar_drag_thumb_offset.get().is_none()
-                            && !this.focus_handle.contains_focused(cx)
-                        {
-                            this.hide_scrollbar(cx);
-                            cx.notify();
-                        }
-
-                        cx.stop_propagation();
-                    }),
-                )
-                .on_scroll_wheel(cx.listener(|_, _, cx| {
-                    cx.notify();
-                }))
-                .h_full()
-                .absolute()
-                .right_1()
-                .top_1()
-                .bottom_1()
-                .w(px(12.))
-                .cursor_default()
-                .child(ProjectPanelScrollbar::vertical(
-                    percentage as f32..end_offset as f32,
-                    self.scroll_handle.clone(),
-                    self.vertical_scrollbar_drag_thumb_offset.clone(),
-                    cx.view().entity_id(),
-                )),
-        )
-    }
-
-    fn render_horizontal_scrollbar(&self, cx: &mut ViewContext<Self>) -> Option<Stateful<Div>> {
-        if !Self::should_show_scrollbar(cx) {
-            return None;
-        }
-        let scroll_handle = self.scroll_handle.0.borrow();
-        let longest_item_width = scroll_handle
-            .last_item_size
-            .filter(|_| {
-                self.show_scrollbar || self.horizontal_scrollbar_drag_thumb_offset.get().is_some()
-            })
-            .filter(|size| size.contents.width > size.item.width)?
-            .contents
-            .width
-            .0 as f64;
-        let current_offset = scroll_handle.base_handle.offset().x.0.min(0.).abs() as f64;
-        let mut percentage = current_offset / longest_item_width;
-        let end_offset = (current_offset + scroll_handle.base_handle.bounds().size.width.0 as f64)
-            / longest_item_width;
-        // Uniform scroll handle might briefly report an offset greater than the length of a list;
-        // in such case we'll adjust the starting offset as well to keep the scrollbar thumb length stable.
-        let overshoot = (end_offset - 1.).clamp(0., 1.);
-        if overshoot > 0. {
-            percentage -= overshoot;
-        }
-        const MINIMUM_SCROLLBAR_PERCENTAGE_WIDTH: f64 = 0.005;
-        if percentage + MINIMUM_SCROLLBAR_PERCENTAGE_WIDTH > 1.0 || end_offset > longest_item_width
-        {
-            return None;
-        }
-        if longest_item_width < scroll_handle.base_handle.bounds().size.width.0 as f64 {
-            return None;
-        }
-        let end_offset = end_offset.clamp(percentage + MINIMUM_SCROLLBAR_PERCENTAGE_WIDTH, 1.);
-        Some(
-            div()
-                .occlude()
-                .id("project-panel-horizontal-scroll")
-                .on_mouse_move(cx.listener(|_, _, cx| {
-                    cx.notify();
-                    cx.stop_propagation()
-                }))
-                .on_hover(|_, cx| {
-                    cx.stop_propagation();
-                })
-                .on_any_mouse_down(|_, cx| {
-                    cx.stop_propagation();
-                })
-                .on_mouse_up(
-                    MouseButton::Left,
-                    cx.listener(|this, _, cx| {
-                        if this.horizontal_scrollbar_drag_thumb_offset.get().is_none()
-                            && !this.focus_handle.contains_focused(cx)
-                        {
-                            this.hide_scrollbar(cx);
-                            cx.notify();
-                        }
-
-                        cx.stop_propagation();
-                    }),
-                )
-                .on_scroll_wheel(cx.listener(|_, _, cx| {
-                    cx.notify();
-                }))
-                .w_full()
-                .absolute()
-                .right_1()
-                .left_1()
-                .bottom_1()
-                .h(px(12.))
-                .cursor_default()
-                .when(self.width.is_some(), |this| {
-                    this.child(ProjectPanelScrollbar::horizontal(
-                        percentage as f32..end_offset as f32,
-                        self.scroll_handle.clone(),
-                        self.horizontal_scrollbar_drag_thumb_offset.clone(),
-                        cx.view().entity_id(),
-                    ))
-                }),
-        )
     }
 
     fn dispatch_context(&self, cx: &ViewContext<Self>) -> KeyContext {
