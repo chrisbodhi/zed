@@ -94,8 +94,6 @@ struct EditState {
     entry_id: ProjectEntryId,
     is_new_entry: bool,
     is_dir: bool,
-    is_symlink: bool,
-    depth: usize,
     processing_filename: Option<String>,
 }
 
@@ -981,8 +979,6 @@ impl ProjectPanel {
                 is_new_entry: true,
                 is_dir,
                 processing_filename: None,
-                is_symlink: false,
-                depth: 0,
             });
             self.filename_editor.update(cx, |editor, cx| {
                 editor.clear(cx);
@@ -1021,8 +1017,6 @@ impl ProjectPanel {
                         is_new_entry: false,
                         is_dir: entry.is_dir(),
                         processing_filename: None,
-                        is_symlink: entry.is_symlink,
-                        depth: 0,
                     });
                     let file_name = entry
                         .path
@@ -1822,12 +1816,6 @@ impl ProjectPanel {
                         .get(&entry.id)
                         .map(|ancestor| ancestor.current_ancestor_depth)
                         .unwrap_or_default();
-                    if let Some(edit_state) = &mut self.edit_state {
-                        if edit_state.entry_id == entry.id {
-                            edit_state.is_symlink = entry.is_symlink;
-                            edit_state.depth = depth;
-                        }
-                    }
                     let mut ancestors = std::mem::take(&mut auto_folded_ancestors);
                     if ancestors.len() > 1 {
                         ancestors.reverse();
