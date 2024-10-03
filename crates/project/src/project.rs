@@ -560,13 +560,13 @@ impl Project {
         client.add_model_request_handler(Self::handle_open_buffer_by_id);
         client.add_model_request_handler(Self::handle_open_buffer_by_path);
         client.add_model_request_handler(Self::handle_open_new_buffer);
-        client.add_model_request_handler(Self::handle_task_context_for_location);
         client.add_model_message_handler(Self::handle_create_buffer_for_peer);
 
         WorktreeStore::init(&client);
         BufferStore::init(&client);
         LspStore::init(&client);
         SettingsObserver::init(&client);
+        TaskStore::init(&client);
     }
 
     pub fn local(
@@ -776,10 +776,10 @@ impl Project {
             client.add_model_message_handler(Self::handle_update_worktree);
             client.add_model_message_handler(Self::handle_update_project);
             client.add_model_request_handler(BufferStore::handle_update_buffer);
-            client.add_model_request_handler(TaskStore::handle_task_context_for_location);
             BufferStore::init(&client);
             LspStore::init(&client);
             SettingsObserver::init(&client);
+            TaskStore::init(&client);
 
             this
         })
@@ -3492,15 +3492,6 @@ impl Project {
         })??;
 
         Ok(response)
-    }
-
-    async fn handle_task_context_for_location(
-        project: Model<Self>,
-        envelope: TypedEnvelope<proto::TaskContextForLocation>,
-        mut cx: AsyncAppContext,
-    ) -> Result<proto::TaskContext> {
-        let task_store = project.update(&mut cx, |project, _| project.task_store.clone())?;
-        TaskStore::handle_task_context_for_location(task_store, envelope, cx).await
     }
 
     async fn handle_search_candidate_buffers(
